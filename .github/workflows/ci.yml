@@ -1,0 +1,71 @@
+name: Quality Gate
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  unit-integration:
+    name: Unit & Integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run test:unit
+      - run: npm run test:integration
+      - run: npm run build
+  e2e:
+    name: Cypress E2E
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx cypress install
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: cypress-failures
+          path: cypress/screenshots
+          if-no-files-found: ignore
+  load:
+    name: k6 Load
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: grafana/setup-k6-action@v1
+      - name: Start backend
+        run: |
+          npm run dev:api > /tmp/nexo-api.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:3001/api/health && exit 0; sleep 1; done
+          cat /tmp/nexo-api.log
+          exit 1
+      - run: npm run test:load
+  quality-gate:
+    name: Quality Gate
+    if: always()
+    needs: [unit-integration, e2e, load]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all suites
+        env:
+          UNIT: ${{ needs.unit-integration.result }}
+          E2E: ${{ needs.e2e.result }}
+          LOAD: ${{ needs.load.result }}
+        run: test "$UNIT" = success && test "$E2E" = success && test "$LOAD" = success

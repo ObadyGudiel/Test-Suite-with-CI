@@ -1,0 +1,8 @@
+node_modules/
+dist/
+data/
+.env
+cypress/screenshots/
+cypress/videos/
+coverage/
+*.log
