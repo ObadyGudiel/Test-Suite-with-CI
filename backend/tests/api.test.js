@@ -10,8 +10,11 @@ test('authenticated database workflow, validation, audit and persistence', async
  const agent=request.agent(app);
  try {
   await agent.get('/api/workspace').expect(401);
-  await agent.post('/api/login').send({email:'admin@nexo.local',password:'wrong'}).expect(401);
-  await agent.post('/api/login').send({email:'admin@nexo.local',password:'NexoDemo2026!'}).expect(200);
+  await agent.post('/api/login').send({email:'obadygudiel@gmail.com',password:'wrong'}).expect(401);
+  await agent.post('/api/login').send({email:'obadygudiel@gmail.com',password:'obady123'}).expect(200);
+  const seededWorkspace=(await agent.get('/api/workspace').expect(200)).body;
+  assert.equal(seededWorkspace.user.name,'Obady Pérez');
+  assert.equal(seededWorkspace.tasks.some(task=>task.assignee===''),true);
   const project=(await agent.post('/api/projects').send({name:'Integración',description:'Proyecto de prueba',color:'#267566'}).expect(201)).body;
   await agent.post('/api/tasks').send({title:' ',projectId:project.id}).expect(400);
   await agent.post('/api/tasks').send({title:'Orphan',projectId:'missing'}).expect(404);
@@ -31,7 +34,7 @@ test('rejects invalid updates, cross-site mutations, unauthenticated writes and 
  try{
   await agent.post('/api/tasks').send({title:'Unauthorized',projectId:'p1'}).expect(401);
   await agent.post('/api/login').send({email:[],password:42}).expect(400);
-  await agent.post('/api/login').send({email:'admin@nexo.local',password:'NexoDemo2026!'}).expect(200);
+  await agent.post('/api/login').send({email:'obadygudiel@gmail.com',password:'obady123'}).expect(200);
   await agent.post('/api/projects').set('Sec-Fetch-Site','cross-site').send({name:'Blocked'}).expect(403);
   await agent.post('/api/projects').send({name:'Invalid',color:'not-a-color'}).expect(400);
   const state=(await agent.get('/api/workspace')).body;const task=state.tasks[0];
@@ -43,14 +46,39 @@ test('rejects invalid updates, cross-site mutations, unauthenticated writes and 
   await agent.get('/api/missing').expect(404);
  }finally{db.close();}
 });
+test('deletes a project and its associated tasks after authentication',async()=>{
+ const {app,db}=createApp({database:':memory:',seed:true});const agent=request.agent(app);
+ try{
+  await agent.post('/api/login').send({email:'obadygudiel@gmail.com',password:'obady123'}).expect(200);
+  const before=(await agent.get('/api/workspace').expect(200)).body;
+  assert.ok(before.tasks.some(task=>task.projectId==='p1'));
+  await agent.delete('/api/projects/p1').expect(204);
+  const after=(await agent.get('/api/workspace').expect(200)).body;
+  assert.equal(after.projects.some(project=>project.id==='p1'),false);
+  assert.equal(after.tasks.some(task=>task.projectId==='p1'),false);
+  await agent.delete('/api/projects/p1').expect(404);
+ }finally{db.close();}
+});
 test('database preserves projects and tasks after closing and reopening the connection',async()=>{
  const directory=mkdtempSync(join(tmpdir(),'nexo-test-'));const database=join(directory,'test.db');let instance=createApp({database,seed:false});
  try{
-  let agent=request.agent(instance.app);await agent.post('/api/login').send({email:'admin@nexo.local',password:'NexoDemo2026!'}).expect(200);
+  let agent=request.agent(instance.app);await agent.post('/api/login').send({email:'obadygudiel@gmail.com',password:'obady123'}).expect(200);
   const p=(await agent.post('/api/projects').send({name:'Persistent'}).expect(201)).body;
   const t=(await agent.post('/api/tasks').send({title:'Survives restart',projectId:p.id}).expect(201)).body;
   instance.db.close();instance=createApp({database,seed:false});agent=request.agent(instance.app);
-  await agent.post('/api/login').send({email:'admin@nexo.local',password:'NexoDemo2026!'}).expect(200);
+  await agent.post('/api/login').send({email:'obadygudiel@gmail.com',password:'obady123'}).expect(200);
   const state=(await agent.get('/api/workspace').expect(200)).body;assert.equal(state.tasks[0].id,t.id);assert.equal(state.projects[0].id,p.id);
  }finally{instance.db.close();rmSync(directory,{recursive:true,force:true});}
+});
+test('upgrades the legacy seeded administrator name', async () => {
+ const directory=mkdtempSync(join(tmpdir(),'nexo-name-'));const database=join(directory,'test.db');
+ let instance=createApp({database,seed:false});
+ try {
+  instance.db.prepare("UPDATE users SET name='Usuario anterior', email='admin@nexo.local' WHERE email='obadygudiel@gmail.com'").run();
+  instance.db.close();
+  instance=createApp({database,seed:false});
+  const agent=request.agent(instance.app);
+  await agent.post('/api/login').send({email:'obadygudiel@gmail.com',password:'obady123'}).expect(200);
+  assert.equal((await agent.get('/api/workspace').expect(200)).body.user.name,'Obady Pérez');
+ } finally {instance.db.close();rmSync(directory,{recursive:true,force:true});}
 });
