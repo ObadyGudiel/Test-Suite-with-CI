@@ -14,6 +14,7 @@ test('authenticated database workflow, validation, audit and persistence', async
   await agent.post('/api/login').send({email:'obadygudiel@gmail.com',password:'obady123'}).expect(200);
   const seededWorkspace=(await agent.get('/api/workspace').expect(200)).body;
   assert.equal(seededWorkspace.user.name,'Obady Pérez');
+  assert.equal(seededWorkspace.tasks.some(task=>task.assignee===''),true);
   const project=(await agent.post('/api/projects').send({name:'Integración',description:'Proyecto de prueba',color:'#267566'}).expect(201)).body;
   await agent.post('/api/tasks').send({title:' ',projectId:project.id}).expect(400);
   await agent.post('/api/tasks').send({title:'Orphan',projectId:'missing'}).expect(404);
@@ -45,6 +46,19 @@ test('rejects invalid updates, cross-site mutations, unauthenticated writes and 
   await agent.get('/api/missing').expect(404);
  }finally{db.close();}
 });
+test('deletes a project and its associated tasks after authentication',async()=>{
+ const {app,db}=createApp({database:':memory:',seed:true});const agent=request.agent(app);
+ try{
+  await agent.post('/api/login').send({email:'obadygudiel@gmail.com',password:'obady123'}).expect(200);
+  const before=(await agent.get('/api/workspace').expect(200)).body;
+  assert.ok(before.tasks.some(task=>task.projectId==='p1'));
+  await agent.delete('/api/projects/p1').expect(204);
+  const after=(await agent.get('/api/workspace').expect(200)).body;
+  assert.equal(after.projects.some(project=>project.id==='p1'),false);
+  assert.equal(after.tasks.some(task=>task.projectId==='p1'),false);
+  await agent.delete('/api/projects/p1').expect(404);
+ }finally{db.close();}
+});
 test('database preserves projects and tasks after closing and reopening the connection',async()=>{
  const directory=mkdtempSync(join(tmpdir(),'nexo-test-'));const database=join(directory,'test.db');let instance=createApp({database,seed:false});
  try{
@@ -60,7 +74,7 @@ test('upgrades the legacy seeded administrator name', async () => {
  const directory=mkdtempSync(join(tmpdir(),'nexo-name-'));const database=join(directory,'test.db');
  let instance=createApp({database,seed:false});
  try {
-  instance.db.prepare("UPDATE users SET name='Alex Morgan', email='admin@nexo.local' WHERE email='obadygudiel@gmail.com'").run();
+  instance.db.prepare("UPDATE users SET name='Usuario anterior', email='admin@nexo.local' WHERE email='obadygudiel@gmail.com'").run();
   instance.db.close();
   instance=createApp({database,seed:false});
   const agent=request.agent(instance.app);

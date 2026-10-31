@@ -1,11 +1,26 @@
 describe('Flujos completos de Nexo',()=>{
  beforeEach(()=>{cy.visit('/');cy.get('.demo-note').should('not.exist');cy.get('input[name=email]').type('obadygudiel@gmail.com');cy.get('input[name=password]').type('obady123');cy.contains('button','Iniciar sesión').click();cy.contains('Cada gran idea empieza aquí.').should('be.visible');});
+ it('deja vacío el responsable al crear una tarea nueva',()=>{
+  cy.contains('button','Nueva tarea').click();
+  cy.get('input[name=assignee]').should('have.value','');
+ });
  it('crea un proyecto y gestiona el ciclo de una tarea con persistencia',()=>{
   const suffix=Date.now();const project='Proyecto E2E '+suffix;const title='Entrega E2E '+suffix;
   cy.contains('nav button','Proyectos').click();cy.contains('button','Nuevo proyecto').click();cy.get('input[name=name]').type(project);cy.get('textarea[name=description]').type('Proyecto creado desde Cypress');cy.contains('[role=dialog] button','Crear proyecto').click();
-  cy.contains('button.project-card',project).click();cy.contains('button','Nueva tarea').click();cy.get('input[name=title]').type(title);cy.get('select[name=projectId]').select(project);cy.get('select[name=priority]').select('high');cy.contains('button','Crear tarea').click();cy.contains('[data-testid=task-card]',title).should('be.visible').click();
+  cy.contains('button.project-open',project).click();cy.contains('button','Nueva tarea').click();cy.get('input[name=title]').type(title);cy.get('select[name=projectId]').select(project);cy.get('select[name=priority]').select('high');cy.contains('button','Crear tarea').click();cy.contains('[data-testid=task-card]',title).should('be.visible').click();
   cy.get('select[name=status]').select('done');cy.contains('button','Guardar cambios').click();cy.reload();cy.contains('.column','Completado').should('contain',title);
   cy.contains('[data-testid=task-card]',title).click();cy.contains('button','Eliminar').click();cy.contains('button','Confirmar eliminación').click();cy.contains('[data-testid=task-card]',title).should('not.exist');
+ });
+ it('elimina un proyecto desde la vista de proyectos tras confirmarlo',()=>{
+  const project='Proyecto para eliminar '+Date.now();
+  cy.contains('nav button','Proyectos').click();
+  cy.contains('button','Nuevo proyecto').click();
+  cy.get('input[name=name]').type(project);
+  cy.contains('[role=dialog] button','Crear proyecto').click();
+  cy.get(`button[aria-label="Eliminar proyecto ${project}"]`).click();
+  cy.contains('[role=dialog]','Eliminar proyecto').should('be.visible');
+  cy.contains('[role=dialog] button','Eliminar proyecto').click();
+  cy.contains('button.project-open',project).should('not.exist');
  });
  it('busca, cambia vista y cierra sesión en una ventana de poca altura',()=>{cy.viewport(1280,720);cy.get('input[aria-label="Buscar tareas"]').type('no-existe-98765');cy.contains('Tu próximo logro empieza').should('be.visible');cy.get('input[aria-label="Buscar tareas"]').clear();cy.get('button[aria-label="Vista de lista"]').click();cy.get('.task-list>button').should('have.length.greaterThan',0);cy.contains('button','Cerrar sesión').click();cy.contains('Iniciar sesión').should('be.visible');});
  it('muestra el dashboard sin desbordamiento y permite cerrar sesión en móvil',()=>{cy.viewport(1440,1000);cy.document().then(doc=>expect(doc.documentElement.scrollWidth).to.be.at.most(1440));cy.screenshot('nexo-dashboard',{capture:'viewport'});cy.viewport(390,844);cy.document().then(doc=>expect(doc.documentElement.scrollWidth).to.be.at.most(390));cy.get('button[aria-label="Cerrar sesión"]').click();cy.contains('Iniciar sesión').should('be.visible');});
