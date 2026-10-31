@@ -9,9 +9,13 @@ export function openDatabase(path,seed) {
  CREATE TABLE IF NOT EXISTS tasks(id TEXT PRIMARY KEY,title TEXT NOT NULL,description TEXT NOT NULL,projectId TEXT NOT NULL REFERENCES projects(id),status TEXT NOT NULL,priority TEXT NOT NULL,assignee TEXT NOT NULL,dueDate TEXT NOT NULL,createdAt TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS activity(id TEXT PRIMARY KEY,action TEXT NOT NULL,actor TEXT NOT NULL,createdAt TEXT NOT NULL);`);
  if(!db.prepare('SELECT id FROM users LIMIT 1').get()) {
-  const password=process.env.ADMIN_PASSWORD || (process.env.NODE_ENV==='production'?null:'NexoDemo2026!');
-  if(!password || password.length<12) throw new Error('ADMIN_PASSWORD debe tener al menos 12 caracteres');
-  db.prepare('INSERT INTO users VALUES(?,?,?,?)').run(randomUUID(),'Alex Morgan',process.env.ADMIN_EMAIL||'admin@nexo.local',hashPassword(password));
+  const password=process.env.ADMIN_PASSWORD || (process.env.NODE_ENV==='production'?null:'obady123');
+  if(!password || (process.env.NODE_ENV==='production'&&password.length<12)) throw new Error('ADMIN_PASSWORD debe tener al menos 12 caracteres en producción');
+  db.prepare('INSERT INTO users VALUES(?,?,?,?)').run(randomUUID(),'Obady Pérez',process.env.ADMIN_EMAIL||'obadygudiel@gmail.com',hashPassword(password));
+ }
+ if(process.env.NODE_ENV!=='production'&&!process.env.ADMIN_EMAIL&&!process.env.ADMIN_PASSWORD){
+  const legacy=db.prepare("SELECT id FROM users WHERE email='admin@nexo.local'").get();
+  if(legacy)db.prepare('UPDATE users SET name=?,email=?,password=? WHERE id=?').run('Obady Pérez','obadygudiel@gmail.com',hashPassword('obady123'),legacy.id);
  }
  if(seed && !db.prepare('SELECT id FROM projects LIMIT 1').get()) {
   const projects=[['p1','Plataforma digital','La próxima generación de nuestra experiencia digital.','#5362A7'],['p2','Identidad de marca','Una identidad consistente en cada punto de contacto.','#AD5C8E'],['p3','Operaciones internas','Procesos simples para equipos extraordinarios.','#D4775C']];
